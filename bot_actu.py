@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 
-# --- CONFIGURATION DIRECTE ---
+# --- CONFIGURATION ---
 PAGE_TOKEN = "EAAMfBfPFbyMBQ8iQizXN7B3a9ZCPgOjvUHASnCZASUC4o5wRI8lv8pa2KtofzAMnHF9dXyhs08ZAXadgGIFiqtfnZC8Q9WgCvov3FnQRPO4Vg6TUEv3RzxwHZB1smdxECKm7TCl2a2iVCdrIzqZASZB2JzbGJo6OMU3pG6fZCm1tziwCziYNZBHYMmdxdZCYRnIePQ"
 
 RSS_ARDENNAIS = "https://www.lardennais.fr/rss/region/ardennes"
@@ -23,32 +23,30 @@ def publier_actu():
     if len(feed_a.entries) > 0:
         article_a_poster = feed_a.entries[0]
         source_nom = "L'Ardennais"
-
-    # 2. TEST UNION (si pas d'Ardennais)
-    if article_a_poster is None:
+    else:
+        # 2. TEST UNION (si l'Ardennais ne répond pas)
         print("Check de l'Union...")
         feed_u = feedparser.parse(RSS_UNION)
         if len(feed_u.entries) > 0:
             article_a_poster = feed_u.entries[0]
             source_nom = "L'Union"
 
-    # 3. SÉCURITÉ : ARRÊT SI RIEN DU TOUT
+    # --- ÉTAPE CRUCIALE : ARRÊT SI RIEN ---
     if article_a_poster is None:
-        print("Aucun article trouvé sur les flux.")
-        return
+        print("Aucun article trouvé sur les flux. Arrêt du script.")
+        return # ICI le script s'arrête proprement
 
-    # 4. SÉCURITÉ DOUBLONS (Vérification de l'heure)
-    # On récupère la date de l'article
+    # 3. VÉRIFICATION DE L'HEURE (DOUBLONS)
     pub_date = article_a_poster.get('published_parsed') or article_a_poster.get('updated_parsed')
     if pub_date:
         article_time = datetime.fromtimestamp(time.mktime(pub_date))
         now = datetime.utcnow()
-        # Si l'article a plus de 65 minutes, on considère qu'on l'a déjà posté
+        # Si l'article a plus de 65 minutes, on ne poste pas
         if now - article_time > timedelta(minutes=65):
-            print(f"L'article le plus récent date de {article_time}. Trop vieux pour être posté.")
+            print(f"L'article date de {article_time}. Trop vieux, déjà posté.")
             return
 
-    # 5. PRÉPARATION DU POST
+    # 4. PRÉPARATION DU POST (Seulement si on a un article récent)
     titre = article_a_poster.title
     lien = article_a_poster.link
     resume_raw = article_a_poster.summary if 'summary' in article_a_poster else ""
@@ -57,10 +55,16 @@ def publier_actu():
 
     message = f"🔴 {source_nom} : {titre}\n\n{extrait}\n\nLire la suite ici : {lien}\n\n#actualiter"
 
+    # 5. ENVOI
     try:
         graph = facebook.GraphAPI(access_token=PAGE_TOKEN)
         graph.put_object(parent_object='me', connection_name='feed', message=message, link=lien)
         print(f"✅ Posté avec succès : {titre}")
+    except Exception as e:
+        print(f"❌ Erreur Facebook : {e}")
+
+if __name__ == "__main__":
+    publier_actu()
     except Exception as e:
         print(f"❌ Erreur Facebook : {e}")
 
