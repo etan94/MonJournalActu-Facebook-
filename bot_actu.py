@@ -1,20 +1,17 @@
 import feedparser
 import facebook
 import os
-import time
 from bs4 import BeautifulSoup
 
-# --- CONFIGURATION (Remplace par tes vrais accès) ---
-APP_ID = "878535355232035"
-APP_SECRET = "0a456acba55d95d3932b7a5ae0037915"
-# Conseil : Utilise un Token de Page "Longue durée" (60 jours)
-PAGE_TOKEN = "EAAMfBfPFbyMBQ8iQizXN7B3a9ZCPgOjvUHASnCZASUC4o5wRI8lv8pa2KtofzAMnHF9dXyhs08ZAXadgGIFiqtfnZC8Q9WgCvov3FnQRPO4Vg6TUEv3RzxwHZB1smdxECKm7TCl2a2iVCdrIzqZASZB2JzbGJo6OMU3pG6fZCm1tziwCziYNZBHYMmdxdZCYRnIePQ" 
+# --- CONFIGURATION DIRECTE ---
+# Ton Token de Page (Garde-le bien dans les guillemets)
+PAGE_TOKEN = "EAAMfBfPFbyMBQ8iQizXN7B3a9ZCPgOjvUHASnCZASUC4o5wRI8lv8pa2KtofzAMnHF9dXyhs08ZAXadgGIFiqtfnZC8Q9WgCvov3FnQRPO4Vg6TUEv3RzxwHZB1smdxECKm7TCl2a2iVCdrIzqZASZB2JzbGJo6OMU3pG6fZCm1tziwCziYNZBHYMmdxdZCYRnIePQ"
 
 # Liens des flux RSS
 RSS_ARDENNAIS = "https://www.lardennais.fr/rss/region/ardennes"
 RSS_UNION = "https://www.lunion.fr/rss/direct"
 
-# Fichier pour la mémoire (GitHub Actions repart à zéro, mais ce script gère l'heure)
+# Fichier pour la mémoire (pour éviter les doublons)
 LOG_FILE = "dernier_article.txt"
 
 def obtenir_dernier_post():
@@ -28,14 +25,14 @@ def sauvegarder_dernier_post(lien):
         f.write(lien)
 
 def publier_actu():
-    print("--- Démarrage de la vérification ---")
+    print("--- Vérification des actualités ---")
     last_link = obtenir_dernier_post()
     
     article_a_poster = None
     source_nom = ""
 
     # 1. TENTATIVE L'ARDENNAIS
-    print("Lecture du flux L'Ardennais...")
+    print("Lecture de l'Ardennais...")
     feed_a = feedparser.parse(RSS_ARDENNAIS)
     
     if len(feed_a.entries) > 0:
@@ -44,9 +41,9 @@ def publier_actu():
             article_a_poster = premier_a
             source_nom = "L'Ardennais"
     
-    # 2. TENTATIVE L'UNION (si rien sur l'Ardennais ou si c'est le même article)
+    # 2. TENTATIVE L'UNION (si rien de neuf sur l'Ardennais)
     if article_a_poster is None:
-        print("Rien de nouveau sur L'Ardennais, passage à L'Union...")
+        print("Rien de neuf sur l'Ardennais, check de l'Union...")
         feed_u = feedparser.parse(RSS_UNION)
         if len(feed_u.entries) > 0:
             premier_u = feed_u.entries[0]
@@ -54,13 +51,46 @@ def publier_actu():
                 article_a_poster = premier_u
                 source_nom = "L'Union"
 
-    # 3. SI TOUJOURS RIEN
+    # 3. SI RIEN DE NEUF DU TOUT
     if article_a_poster is None:
-        print("Aucune nouvelle actualité détectée sur les deux sources.")
+        print("Aucun nouvel article à publier pour le moment.")
         return
 
-    # 4. PRÉPARATION DU TEXTE
+    # 4. PRÉPARATION DU POST
     titre = article_a_poster.title
+    lien = article_a_poster.link
+    
+    # Nettoyage du texte (enlève le HTML)
+    resume_raw = article_a_poster.summary if 'summary' in article_a_poster else ""
+    resume_propre = BeautifulSoup(resume_raw, "html.parser").get_text()
+    
+    # On prend le début (300 caractères max)
+    extrait = (resume_propre[:300] + '..') if len(resume_propre) > 300 else resume_propre
+
+    message = (
+        f"🔴 {source_nom} : {titre}\n\n"
+        f"{extrait}\n\n"
+        f"Lire la suite ici : {lien}\n\n"
+        f"#actualiter"
+    )
+
+    # 5. ENVOI SUR FACEBOOK
+    try:
+        graph = facebook.GraphAPI(access_token=PAGE_TOKEN)
+        # On met le lien dans le paramètre 'link' pour que l'image s'affiche
+        graph.put_object(
+            parent_object='me', 
+            connection_name='feed', 
+            message=message, 
+            link=lien
+        )
+        sauvegarder_dernier_post(lien)
+        print(f"✅ SUCCÈS : '{titre}' posté sur Facebook !")
+    except Exception as e:
+        print(f"❌ ERREUR : {e}")
+
+if __name__ == "__main__":
+    publier_actu()
     lien = article_a_poster.link
     
     # Nettoyage du résumé (summary) pour enlever les balises HTML
