@@ -1,15 +1,40 @@
-name: Facebook Bot Hourly
+name: Bot Actu Facebook
+
 on:
   schedule:
-    - cron: '0 * * * *' # Se lance toutes les heures
-  workflow_dispatch: # Pour le lancer à la main
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
-      - run: pip install facebook-sdk feedparser beautifulsoup4
-      - run: python bot_actu.py
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore historique
+        uses: actions/cache@v3
+        with:
+          path: articles_postes.json
+          key: historique-${{ runner.os }}
+          restore-keys: historique-
+
+      - name: Run bot
+        env:
+          PAGE_TOKEN: ${{ secrets.PAGE_TOKEN }}
+        run: python bot_actu.py
+
+      - name: Save historique
+        uses: actions/cache@v3
+        with:
+          path: articles_postes.json
+          key: historique-${{ runner.os }}
