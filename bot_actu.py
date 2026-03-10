@@ -74,18 +74,6 @@ def resoudre_url(url):
         return url
 
 
-def get_og_image(url):
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=8)
-        soup = BeautifulSoup(resp.text, "html.parser")
-        tag = soup.find("meta", property="og:image")
-        if tag and tag.get("content"):
-            return tag["content"]
-    except Exception:
-        pass
-    return None
-
-
 def est_recent(entry):
     pub = entry.get("published_parsed") or entry.get("updated_parsed")
     if not pub:
@@ -140,24 +128,13 @@ def publier_actu():
             lien_rss = entry["link"]
             lien = resoudre_url(lien_rss)
             msg = construire_message(entry, source, lien)
-            image_url = get_og_image(lien)
-            print("Image : " + (image_url[:60] if image_url else "non trouvee"))
             try:
-                if image_url:
-                    graph.put_object(
-                        parent_object=page_id,
-                        connection_name="feed",
-                        message=msg,
-                        link=lien,
-                        picture=image_url,
-                    )
-                else:
-                    graph.put_object(
-                        parent_object=page_id,
-                        connection_name="feed",
-                        message=msg,
-                        link=lien,
-                    )
+                graph.put_object(
+                    parent_object=page_id,
+                    connection_name="feed",
+                    message=msg,
+                    link=lien,
+                )
                 print("OK - " + entry.get("title", lien)[:60])
                 nouveaux_liens.add(lien_rss)
                 total_postes += 1
