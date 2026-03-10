@@ -19,22 +19,146 @@ SOURCES = [
     {
         "nom": "L'Ardennais",
         "url": "https://news.google.com/rss/search?q=ardennes&hl=fr&gl=FR&ceid=FR:fr",
-        "emoji": "🔴",
-        "hashtags": "#Ardennes #Actualité #LArdennais",
+        "prefixe": "[Ardennes]",
+        "hashtags": "#Ardennes #Actualite #LArdennais",
     },
 ]
 
-# Durée max d'un article (en minutes) pour être posté
+# Duree max d'un article (en minutes) pour etre poste
 FENETRE_MINUTES = 65
 
-# Fichier pour mémoriser les articles déjà postés
+# Fichier pour memoriser les articles deja postes
 FICHIER_HISTORIQUE = "articles_postes.json"
 
 
 # --- GESTION DE L'HISTORIQUE ---
 
-def charger_historique() -> set:
-    """Charge les liens déjà postés depuis le fichier JSON."""
+def charger_historique():
+    if not os.path.exists(FICHIER_HISTORIQUE):
+        return set()
+    try:
+        with open(FICHIER_HISTORIQUE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return set(data.get("liens", []))
+    except (json.JSONDecodeError, KeyError):
+        return set()
+
+
+def sauvegarder_historique(liens):
+    liste = list(liens)[-500:]
+    with open(FICHIER_HISTORIQUE, "w", encoding="utf-8") as f:
+        json.dump({"liens": liste, "maj": datetime.utcnow().isoformat()}, f, ensure_ascii=False, indent=2)
+
+
+# --- RESOLUTION D'URL ---
+
+def resoudre_url(url):
+    try:
+        resp = requests.head(url, headers=HEADERS, allow_redirects=True, timeout=8)
+        final = resp.url
+        if "?" in final:
+            base, params = final.split("?", 1)
+            propres = [p for p in params.split("&") if not p.lower().startswith("utm_")]
+            final = base + ("?" + "&".join(propres) if propres else "")
+        print("    URL resolue : " + final)
+        return final
+    except Exception as e:
+        print("    Impossible de resoudre l'URL : " + str(e))
+        return url
+
+
+# --- TRAITEMENT D'UN ARTICLE ---
+
+def est_recent(entry):
+    pub = entry.get("published_parsed") or entry.get("updated_parsed")
+    if not pub:
+        return True
+    article_time = datetime.fromtimestamp(time.mktime(pub))
+    return datetime.utcnow() - article_time <= timedelta(minutes=FENETRE_MINUTES)
+
+
+def construire_message(entry, source, lien):
+    titre = entry.get("title", "(Sans titre)")
+    res_raw = entry.get("summary", "")
+    res_txt = BeautifulSoup(res_raw, "html.parser").get_text().strip()
+    extrait = (res_txt[:300] + "...") if len(res_txt) > 300 else res_txt
+
+    lignes = [
+        source["prefixe"] + " " + titre,
+        "",
+    ]
+    if extrait:
+        lignes += [extrait, ""]
+    lignes += ["Lien : " + lien, "", source["hashtags"]]
+
+    return "\n".join(lignes)
+
+
+# --- BOUCLE PRINCIPALE ---
+
+def publier_actu():
+    print("\n" + "="*50)
+    print("  Verification RSS - " + datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+    print("="*50)
+
+    deja_postes = charger_historique()
+    graph = facebook.GraphAPI(access_token=PAGE_TOKEN)
+    nouveaux_liens = set()
+    total_postes = 0
+
+    for source in SOURCES:
+        print("\n[" + source["nom"] + "] Lecture du flux : " + source["url"])
+        feed = feedparser.parse(source["url"])
+
+        if feed.bozo:
+            print("  AVERTISSEMENT parsing : " + str(feed.bozo_exception))
+
+        articles_valides = [
+            e for e in feed.entries
+            if e.get("link") and e["link"] not in deja_postes and est_recent(e)
+        ]
+
+        print("  -> " + str(len(feed.entries)) + " article(s) trouve(s), " +
+              str(len(articles_valides)) + " nouveau(x) recent(s)")
+
+        articles_valides.sort(
+            key=lambda e: time.mktime(
+                e.get("published_parsed") or e.get("updated_parsed") or time.gmtime(0)
+            )
+        )
+
+        for entry in articles_valides:
+            lien_rss = entry["link"]
+            titre_court = entry.get("title", lien_rss)[:80]
+            print("\n  Article : " + titre_court)
+            lien = resoudre_url(lien_rss)
+            msg = construire_message(entry, source, lien)
+            try:
+                graph.put_object(
+                    parent_object="me",
+                    connection_name="feed",
+                    message=msg,
+                    link=lien,
+                )
+                print("  OK - Poste !")
+                nouveaux_liens.add(lien_rss)
+                total_postes += 1
+                time.sleep(2)
+            except facebook.GraphAPIError as e:
+                print("  ERREUR Facebook : " + str(e))
+            except Exception as e:
+                print("  ERREUR inattendue : " + str(e))
+
+    if nouveaux_liens:
+        sauvegarder_historique(deja_postes | nouveaux_liens)
+
+    print("\n" + "="*50)
+    print("  Termine - " + str(total_postes) + " article(s) publie(s)")
+    print("="*50 + "\n")
+
+
+if __name__ == "__main__":
+    publier_actu()    """Charge les liens déjà postés depuis le fichier JSON."""
     if not os.path.exists(FICHIER_HISTORIQUE):
         return set()
     try:
