@@ -9,8 +9,7 @@ from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; RSSBot/1.0)"
-}
+    "User-Agent": "Mozilla/5.0 (compatible; RSSBot/1.0)"}
 
 # --- CONFIGURATION ---
 PAGE_TOKEN = "EAAMfBfPFbyMBQ8iQizXN7B3a9ZCPgOjvUHASnCZASUC4o5wRI8lv8pa2KtofzAMnHF9dXyhs08ZAXadgGIFiqtfnZC8Q9WgCvov3FnQRPO4Vg6TUEv3RzxwHZB1smdxECKm7TCl2a2iVCdrIzqZASZB2JzbGJo6OMU3pG6fZCm1tziwCziYNZBHYMmdxdZCYRnIePQ"
