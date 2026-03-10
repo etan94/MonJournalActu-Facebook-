@@ -9,10 +9,7 @@ from bs4 import BeautifulSoup
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; RSSBot/1.0)"}
 
-# Token utilisateur (Graph API Explorer -> Token utilisateur)
 USER_TOKEN = "EAAMfBfPFbyMBQ9KNTrhrCG9X865v1si9IJSVvJVqTIDeIgqMym7O8fJ1NbhCTMtJDJI0qFHv7OL6E1ZBBbqynlkZAdZCulCH9axPk1hbf6wpg44fYljf848P8gXbL9MXzVVVXx18zLNjZBXhoAAazESDJy2aQFp1LyKZC0faT61MvGZAyZC687nfIv2cko3DIge"
-
-# Nom exact de ta page
 NOM_PAGE = "Actu Ardennes"
 
 SOURCES = [
@@ -24,8 +21,9 @@ SOURCES = [
     },
 ]
 
-FENETRE_MINUTES = 1440
+FENETRE_MINUTES = 60
 FICHIER_HISTORIQUE = "articles_postes.json"
+EXTRAIT_MAX = 1000
 
 
 def get_page_token(user_token, nom_page):
@@ -37,11 +35,8 @@ def get_page_token(user_token, nom_page):
         return None, None
     for page in data["data"]:
         if page["name"].lower() == nom_page.lower():
-            print("Page trouvee : " + page["name"] + " (id=" + page["id"] + ")")
+            print("Page trouvee : " + page["name"])
             return page["access_token"], page["id"]
-    print("Pages disponibles :")
-    for page in data["data"]:
-        print("  - " + page["name"])
     if data["data"]:
         p = data["data"][0]
         print("Utilisation de : " + p["name"])
@@ -79,6 +74,18 @@ def resoudre_url(url):
         return url
 
 
+def get_og_image(url):
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=8)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        tag = soup.find("meta", property="og:image")
+        if tag and tag.get("content"):
+            return tag["content"]
+    except Exception:
+        pass
+    return None
+
+
 def est_recent(entry):
     pub = entry.get("published_parsed") or entry.get("updated_parsed")
     if not pub:
@@ -91,11 +98,11 @@ def construire_message(entry, source, lien):
     titre = entry.get("title", "Sans titre")
     res_raw = entry.get("summary", "")
     res_txt = BeautifulSoup(res_raw, "html.parser").get_text().strip()
-    extrait = (res_txt[:300] + "...") if len(res_txt) > 300 else res_txt
+    extrait = (res_txt[:EXTRAIT_MAX] + "...") if len(res_txt) > EXTRAIT_MAX else res_txt
     lignes = [source["prefixe"] + " " + titre, ""]
     if extrait:
         lignes += [extrait, ""]
-    lignes += ["Lien : " + lien, "", source["hashtags"]]
+    lignes += [lien, "", source["hashtags"]]
     return "\n".join(lignes)
 
 
@@ -133,13 +140,24 @@ def publier_actu():
             lien_rss = entry["link"]
             lien = resoudre_url(lien_rss)
             msg = construire_message(entry, source, lien)
+            image_url = get_og_image(lien)
+            print("Image : " + (image_url[:60] if image_url else "non trouvee"))
             try:
-                graph.put_object(
-                    parent_object=page_id,
-                    connection_name="feed",
-                    message=msg,
-                    link=lien,
-                )
+                if image_url:
+                    graph.put_object(
+                        parent_object=page_id,
+                        connection_name="feed",
+                        message=msg,
+                        link=lien,
+                        picture=image_url,
+                    )
+                else:
+                    graph.put_object(
+                        parent_object=page_id,
+                        connection_name="feed",
+                        message=msg,
+                        link=lien,
+                    )
                 print("OK - " + entry.get("title", lien)[:60])
                 nouveaux_liens.add(lien_rss)
                 total_postes += 1
