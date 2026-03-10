@@ -20,7 +20,7 @@ SOURCES = [
     },
 ]
 
-FENETRE_MINUTES = 65
+FENETRE_MINUTES = 1440
 FICHIER_HISTORIQUE = "articles_postes.json"
 
 
