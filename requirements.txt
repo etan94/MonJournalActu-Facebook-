@@ -1,3 +1,4 @@
-facebook-sdk
 feedparser
+facebook-sdk
 beautifulsoup4
+requests
