@@ -9,7 +9,11 @@ from bs4 import BeautifulSoup
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; RSSBot/1.0)"}
 
-USER_TOKEN = "EAAMfBfPFbyMBQzZBV6X38pbAZAIDEG0Gess9OAOgL14mykaOsvYlcSUkRZB0vIrJddeobax0cQqkscJ0W2iQmVKE8nPwuCGNHXMI3VB77m0VCJ18jt24tNvYFQ2lqViZAmJN9M5ijdNZBLORClwld8zZCrK4MmCXRNRDX4EuIofrxXOItwGx5oS3XozNHY"
+# Token utilisateur (Graph API Explorer -> Token utilisateur)
+USER_TOKEN = "EAAMfBfPFbyMBQ9KNTrhrCG9X865v1si9IJSVvJVqTIDeIgqMym7O8fJ1NbhCTMtJDJI0qFHv7OL6E1ZBBbqynlkZAdZCulCH9axPk1hbf6wpg44fYljf848P8gXbL9MXzVVVXx18zLNjZBXhoAAazESDJy2aQFp1LyKZC0faT61MvGZAyZC687nfIv2cko3DIge"
+
+# Nom exact de ta page
+NOM_PAGE = "Actu Ardennes"
 
 SOURCES = [
     {
@@ -22,6 +26,27 @@ SOURCES = [
 
 FENETRE_MINUTES = 1440
 FICHIER_HISTORIQUE = "articles_postes.json"
+
+
+def get_page_token(user_token, nom_page):
+    url = "https://graph.facebook.com/v19.0/me/accounts"
+    resp = requests.get(url, params={"access_token": user_token})
+    data = resp.json()
+    if "data" not in data:
+        print("ERREUR get_page_token : " + str(data))
+        return None, None
+    for page in data["data"]:
+        if page["name"].lower() == nom_page.lower():
+            print("Page trouvee : " + page["name"] + " (id=" + page["id"] + ")")
+            return page["access_token"], page["id"]
+    print("Pages disponibles :")
+    for page in data["data"]:
+        print("  - " + page["name"])
+    if data["data"]:
+        p = data["data"][0]
+        print("Utilisation de : " + p["name"])
+        return p["access_token"], p["id"]
+    return None, None
 
 
 def charger_historique():
@@ -77,7 +102,12 @@ def construire_message(entry, source, lien):
 def publier_actu():
     print("--- Verification RSS ---")
 
-    graph = facebook.GraphAPI(access_token=USER_TOKEN)
+    page_token, page_id = get_page_token(USER_TOKEN, NOM_PAGE)
+    if not page_token:
+        print("Impossible de recuperer le token de page. Arret.")
+        return
+
+    graph = facebook.GraphAPI(access_token=page_token)
     deja_postes = charger_historique()
     nouveaux_liens = set()
     total_postes = 0
@@ -105,7 +135,7 @@ def publier_actu():
             msg = construire_message(entry, source, lien)
             try:
                 graph.put_object(
-                    parent_object="me",
+                    parent_object=page_id,
                     connection_name="feed",
                     message=msg,
                     link=lien,
