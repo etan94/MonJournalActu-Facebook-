@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; RSSBot/1.0)"}
 
-PAGE_TOKEN = "EAAMfBfPFbyMBQ8iQizXN7B3a9ZCPgOjvUHASnCZASUC4o5wRI8lv8pa2KtofzAMnHF9dXyhs08ZAXadgGIFiqtfnZC8Q9WgCvov3FnQRPO4Vg6TUEv3RzxwHZB1smdxECKm7TCl2a2iVCdrIzqZASZB2JzbGJo6OMU3pG6fZCm1tziwCziYNZBHYMmdxdZCYRnIePQ"
+USER_TOKEN = "EAAMfBfPFbyMBQzZBV6X38pbAZAIDEG0Gess9OAOgL14mykaOsvYlcSUkRZB0vIrJddeobax0cQqkscJ0W2iQmVKE8nPwuCGNHXMI3VB77m0VCJ18jt24tNvYFQ2lqViZAmJN9M5ijdNZBLORClwld8zZCrK4MmCXRNRDX4EuIofrxXOItwGx5oS3XozNHY"
 
 SOURCES = [
     {
@@ -76,8 +76,9 @@ def construire_message(entry, source, lien):
 
 def publier_actu():
     print("--- Verification RSS ---")
+
+    graph = facebook.GraphAPI(access_token=USER_TOKEN)
     deja_postes = charger_historique()
-    graph = facebook.GraphAPI(access_token=PAGE_TOKEN)
     nouveaux_liens = set()
     total_postes = 0
 
